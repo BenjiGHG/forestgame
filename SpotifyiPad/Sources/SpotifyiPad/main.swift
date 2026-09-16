@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UIKit
 
 @main
 struct SpotifyiPadApp: App {
@@ -33,25 +34,16 @@ struct ContentView: View {
         }
         .safeAreaInset(edge: .top) {
             HStack(spacing: 12) {
-                Button { model.goBack() } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .disabled(!model.canGoBack)
+                Button { model.goBack() } label: { Image(systemName: "chevron.left") }
+                    .disabled(!model.canGoBack)
 
-                Button { model.goForward() } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .disabled(!model.canGoForward)
+                Button { model.goForward() } label: { Image(systemName: "chevron.right") }
+                    .disabled(!model.canGoForward)
 
                 Spacer()
 
-                Button { model.reload() } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-
-                Button { model.openInSafari() } label: {
-                    Image(systemName: "safari")
-                }
+                Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                Button { model.openInSafari() } label: { Image(systemName: "safari") }
             }
             .font(.headline)
             .foregroundStyle(.white)
@@ -60,9 +52,7 @@ struct ContentView: View {
             .background(.black.opacity(0.92))
         }
         .statusBarHidden(true)
-        .onAppear {
-            model.loadIfNeeded()
-        }
+        .onAppear { model.loadIfNeeded() }
     }
 }
 
@@ -74,7 +64,8 @@ final class SpotifyWebViewModel: NSObject, ObservableObject, WKNavigationDelegat
 
     let webView: WKWebView
     private var progressObservation: NSKeyValueObservation?
-    private var stateObservation: NSKeyValueObservation?
+    private var backObservation: NSKeyValueObservation?
+    private var forwardObservation: NSKeyValueObservation?
     private var didLoad = false
 
     override init() {
@@ -89,17 +80,16 @@ final class SpotifyWebViewModel: NSObject, ObservableObject, WKNavigationDelegat
         webView.navigationDelegate = self
         webView.allowsBackForwardNavigationGestures = true
 
-        progressObservation = webView.observe(\ .estimatedProgress, options: [.initial, .new]) { [weak self] webView, _ in
-            DispatchQueue.main.async {
-                self?.progress = webView.estimatedProgress
-            }
+        progressObservation = webView.observe(\.estimatedProgress, options: [.initial, .new]) { [weak self] webView, _ in
+            DispatchQueue.main.async { self?.progress = webView.estimatedProgress }
         }
 
-        stateObservation = webView.observe(\ .canGoBack, options: [.initial, .new]) { [weak self] webView, _ in
-            DispatchQueue.main.async {
-                self?.canGoBack = webView.canGoBack
-                self?.canGoForward = webView.canGoForward
-            }
+        backObservation = webView.observe(\.canGoBack, options: [.initial, .new]) { [weak self] webView, _ in
+            DispatchQueue.main.async { self?.canGoBack = webView.canGoBack }
+        }
+
+        forwardObservation = webView.observe(\.canGoForward, options: [.initial, .new]) { [weak self] webView, _ in
+            DispatchQueue.main.async { self?.canGoForward = webView.canGoForward }
         }
     }
 
@@ -110,22 +100,12 @@ final class SpotifyWebViewModel: NSObject, ObservableObject, WKNavigationDelegat
         webView.load(URLRequest(url: url, cachePolicy: .useProtocolCachePolicy))
     }
 
-    func goBack() {
-        guard webView.canGoBack else { return }
-        webView.goBack()
-    }
-
-    func goForward() {
-        guard webView.canGoForward else { return }
-        webView.goForward()
-    }
-
-    func reload() {
-        webView.reload()
-    }
+    func goBack() { webView.canGoBack ? webView.goBack() : () }
+    func goForward() { webView.canGoForward ? webView.goForward() : () }
+    func reload() { webView.reload() }
 
     func openInSafari() {
-        guard let url = webView.url ?? URL(string: "https://open.spotify.com/") else { return }
+        let url = webView.url ?? URL(string: "https://open.spotify.com/")!
         UIApplication.shared.open(url)
     }
 
@@ -135,8 +115,6 @@ final class SpotifyWebViewModel: NSObject, ObservableObject, WKNavigationDelegat
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isLoading = false
-        canGoBack = webView.canGoBack
-        canGoForward = webView.canGoForward
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -151,9 +129,6 @@ final class SpotifyWebViewModel: NSObject, ObservableObject, WKNavigationDelegat
 struct SpotifyWebView: UIViewRepresentable {
     @ObservedObject var model: SpotifyWebViewModel
 
-    func makeUIView(context: Context) -> WKWebView {
-        model.webView
-    }
-
+    func makeUIView(context: Context) -> WKWebView { model.webView }
     func updateUIView(_ webView: WKWebView, context: Context) {}
 }
