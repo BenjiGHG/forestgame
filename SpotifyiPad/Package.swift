@@ -3,9 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "SpotifyiPad",
-    platforms: [
-        .iOS(.v17)
-    ],
+    platforms: [.iOS(.v17)],
     products: [
         .iOSApplication(
             name: "Spotify iPad",
@@ -14,10 +12,7 @@ let package = Package(
             teamIdentifier: "",
             displayVersion: "1.0",
             bundleVersion: "1",
-            appIcon: .placeholder(iconName: "AppIcon"),
-            accentColor: .presetColor(.green),
-            supportedDeviceFamilies: [.pad],
-            additionalInfoPlistContentFilePath: "Info.plist"
+            supportedDeviceFamilies: [.pad]
         )
     ],
     targets: [
