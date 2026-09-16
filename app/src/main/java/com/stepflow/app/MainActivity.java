@@ -1,87 +1,28 @@
 package com.stepflow.app;
 
-import android.Manifest;
-import android.app.Activity;
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.Typeface;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
-import android.os.Bundle;
-import android.view.View;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
+import android.Manifest; import android.app.Activity; import android.content.*; import android.content.pm.PackageManager; import android.graphics.*; import android.hardware.*; import android.os.*; import android.view.*; import java.text.SimpleDateFormat; import java.util.*;
 
+/** StepFlow persists per-day deltas, so a sensor reset after a reboot doesn't erase progress. */
 public class MainActivity extends Activity implements SensorEventListener {
-    private static final int REQ = 42;
-    private SensorManager sensorManager;
-    private Sensor stepSensor;
-    private SharedPreferences prefs;
-    private StepView view;
-    private long steps = 0;
-
-    @Override public void onCreate(Bundle b) {
-        super.onCreate(b);
-        prefs = getSharedPreferences("stepflow", MODE_PRIVATE);
-        view = new StepView(this);
-        setContentView(view);
-        if (android.os.Build.VERSION.SDK_INT >= 29 && checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.ACTIVITY_RECOGNITION}, REQ);
-        } else startSensor();
-    }
-
-    private void startSensor() {
-        sensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
-        stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-        if (stepSensor != null) sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI);
-        else { view.sensorMissing = true; view.invalidate(); }
-    }
-
-    @Override public void onRequestPermissionsResult(int r, String[] p, int[] g) {
-        super.onRequestPermissionsResult(r,p,g);
-        if (r == REQ && g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) startSensor();
-        else { view.permissionMissing = true; view.invalidate(); }
-    }
-
-    @Override public void onSensorChanged(SensorEvent e) {
-        long total = (long)e.values[0];
-        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
-        String savedDay = prefs.getString("day", "");
-        if (!today.equals(savedDay)) {
-            prefs.edit().putString("day", today).putLong("base", total).apply();
-        }
-        long base = prefs.getLong("base", total);
-        steps = Math.max(0, total - base);
-        view.invalidate();
-    }
-    @Override public void onAccuracyChanged(Sensor s, int a) {}
-    @Override protected void onResume() { super.onResume(); if (sensorManager != null && stepSensor != null) sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI); }
-    @Override protected void onPause() { super.onPause(); if (sensorManager != null) sensorManager.unregisterListener(this); }
-
-    class StepView extends View {
-        Paint p = new Paint(1); boolean permissionMissing=false, sensorMissing=false;
-        StepView(Context c){ super(c); p.setTypeface(Typeface.create("sans",Typeface.NORMAL)); setBackgroundColor(0xFF0B0D10); }
-        void text(Canvas c,String s,float x,float y,float size,int color,boolean bold){ p.setTextSize(size); p.setColor(color); p.setTypeface(Typeface.create("sans",bold?Typeface.BOLD:Typeface.NORMAL)); c.drawText(s,x,y,p); }
-        @Override protected void onDraw(Canvas c){
-            super.onDraw(c); float w=getWidth(), h=getHeight();
-            text(c,"StepFlow",28,54,27,0xFFFFFFFF,true); text(c,"DEIN TAGESFORTSCHRITT",28,82,12,0xFF8E98A8,false);
-            float cx=w/2f, cy=Math.min(h*0.43f,390); float r=Math.min(w*0.30f,125); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(18); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF20252D); c.drawCircle(cx,cy,r,p);
-            float progress=Math.min(1f,steps/10000f); p.setColor(0xFF35D07F); c.drawArc(cx-r,cy-r,cx+r,cy+r,-90,360*progress,false,p); p.setStyle(Paint.Style.FILL);
-            text(c,String.format(Locale.US,"%,d",steps),cx-p.measureText(String.format(Locale.US,"%,d",steps))/2,cy+10,42,0xFFFFFFFF,true);
-            text(c,"SCHRITTE",cx-42,cy+40,13,0xFF8E98A8,true); text(c,String.format(Locale.US,"Ziel 10.000 • %d%%",Math.round(progress*100)),cx-62,cy+70,12,0xFF35D07F,false);
-            float cardY=cy+r+35; float gap=14; float cw=(w-56-gap)/2f;
-            card(c,28,cardY,cw,"DISTANZ",String.format(Locale.US,"%.2f km",steps*0.00072));
-            card(c,28+cw+gap,cardY,cw,"AKTIVITÄT",steps>0?"In Bewegung":"Noch nicht gestartet");
-            text(c,"Letzte Aktualisierung",28,cardY+132,12,0xFF687180,false);
-            if(permissionMissing) text(c,"Aktivitätserlaubnis wurde nicht erteilt.",28,cardY+160,13,0xFFFFB86B,false);
-            else if(sensorMissing) text(c,"Dein Gerät unterstützt keinen Schrittzähler-Sensor.",28,cardY+160,13,0xFFFFB86B,false);
-        }
-        void card(Canvas c,float x,float y,float ww,String title,String value){ p.setColor(0xFF15191F); c.drawRoundRect(x,y,x+ww,y+105,20,20,p); text(c,title,x+16,y+29,11,0xFF7F8997,true); text(c,value,x+16,y+67,18,0xFFFFFFFF,true); }
-    }
+  static final int REQ_ACTIVITY=42, REQ_NOTIFY=43; SensorManager manager; Sensor sensor; SharedPreferences prefs; StepView view; long steps;
+  @Override public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("stepflow",MODE_PRIVATE);view=new StepView(this);setContentView(view);requestPermissionsThenStart();}
+  void requestPermissionsThenStart(){if(Build.VERSION.SDK_INT>=29&&checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.ACTIVITY_RECOGNITION},REQ_ACTIVITY);else{startSensor();startService();}}
+  void startSensor(){manager=(SensorManager)getSystemService(SENSOR_SERVICE);sensor=manager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);if(sensor==null){view.sensorMissing=true;view.invalidate();}else manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_NORMAL);}
+  void startService(){Intent i=new Intent(this,StepTrackingService.class);if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},REQ_NOTIFY);}
+  @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){super.onRequestPermissionsResult(r,p,g);if(r==REQ_ACTIVITY){if(g.length>0&&g[0]==PackageManager.PERMISSION_GRANTED){startSensor();startService();}else{view.permissionMissing=true;view.invalidate();}}}
+  @Override public void onSensorChanged(SensorEvent e){steps=reconcile((long)e.values[0]);view.invalidate();}
+  long reconcile(long total){String today=dayKey(), day=prefs.getString("day","");long saved=prefs.getLong("daily_steps",0),last=prefs.getLong("last_sensor",-1);if(!today.equals(day)){saved=0;last=total;}else if(last<0)last=total;else if(total>=last)saved+=total-last;else last=total; prefs.edit().putString("day",today).putLong("daily_steps",saved).putLong("last_sensor",total).apply();return saved;}
+  static String dayKey(){return new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());} @Override public void onAccuracyChanged(Sensor s,int a){} @Override protected void onResume(){super.onResume();if(manager!=null&&sensor!=null)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_NORMAL);}@Override protected void onPause(){super.onPause();if(manager!=null)manager.unregisterListener(this);}
+  class StepView extends View {
+    final int BG=0xFF090C0F,SURFACE=0xFF14191E,CARD=0xFF1A2026,GREEN=0xFF78F05B,MUTED=0xFF9BA6B1,WHITE=0xFFF4F8F5; Paint p=new Paint(1);boolean permissionMissing,sensorMissing;int tab;String[] nav={"Heute","Statistik","Ziele","Mehr"};
+    StepView(Context c){super(c);setBackgroundColor(BG);} void text(Canvas c,String s,float x,float y,float z,int col,boolean bold){p.setTextSize(z);p.setColor(col);p.setTypeface(Typeface.create("sans",bold?1:0));p.setStyle(Paint.Style.FILL);c.drawText(s,x,y,p);} float half(String s){return p.measureText(s)/2;}void box(Canvas c,float l,float t,float r,float b,float rad,int col){p.setColor(col);p.setStyle(Paint.Style.FILL);c.drawRoundRect(l,t,r,b,rad,rad,p);}
+    @Override protected void onDraw(Canvas c){super.onDraw(c);if(tab==0)home(c);else if(tab==1)stats(c);else if(tab==2)goals(c);else more(c);bottom(c);}void header(Canvas c,String title,String sub){text(c,title,28,52,28,WHITE,true);text(c,sub,28,78,12,MUTED,true);}
+    void home(Canvas c){header(c,"Guten Tag","DEIN TAGESFORTSCHRITT");float w=getWidth(),cx=w/2,cy=242,r=Math.min(w*.285f,118),prog=Math.min(1,steps/10000f);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(19);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(0xFF273038);c.drawCircle(cx,cy,r,p);p.setColor(GREEN);c.drawArc(cx-r,cy-r,cx+r,cy+r,-90,360*prog,false,p);String count=String.format(Locale.US,"%,d",steps);text(c,count,cx-half(count),cy+5,43,WHITE,true);String lab="SCHRITTE HEUTE";text(c,lab,cx-half(lab),cy+34,11,MUTED,true);String goal=String.format(Locale.US,"Noch %,d bis zu deinem Ziel",Math.max(0,10000-steps));text(c,goal,cx-half(goal),cy+64,13,GREEN,false);float y=398,g=14,cw=(w-56-g)/2;metric(c,28,y,cw,"DISTANZ",String.format(Locale.US,"%.2f km",steps*.00072),"Geschätzt");metric(c,28+cw+g,y,cw,"AKTIVITÄT",activity(),"Heute");box(c,28,y+126,w-28,y+188,20,SURFACE);text(c,"Dein Fortschritt",44,y+152,14,WHITE,true);text(c,Math.round(prog*100)+" %",w-85,y+152,14,GREEN,true);p.setColor(0xFF2B343C);c.drawRoundRect(44,y+165,w-44,y+173,6,6,p);p.setColor(GREEN);c.drawRoundRect(44,y+165,44+(w-88)*prog,y+173,6,6,p);if(permissionMissing)notice(c,"Aktivitätserlaubnis benötigt");else if(sensorMissing)notice(c,"Kein Schrittzähler-Sensor verfügbar");}
+    String activity(){return steps==0?"Bereit":steps<1500?"Leicht":steps<6000?"Aktiv":"Stark";}void metric(Canvas c,float x,float y,float w,String t,String v,String n){box(c,x,y,x+w,y+110,22,CARD);text(c,t,x+16,y+29,11,MUTED,true);text(c,v,x+16,y+63,20,WHITE,true);text(c,n,x+16,y+89,12,GREEN,false);}
+    void stats(Canvas c){header(c,"Statistik","DEINE BEWEGUNG IM ÜBERBLICK");box(c,28,105,getWidth()-28,235,24,CARD);text(c,"Heute",48,138,13,MUTED,true);String v=String.format(Locale.US,"%,d",steps);text(c,v,48,184,37,WHITE,true);text(c,"Schritte",48,210,13,GREEN,false);text(c,"Diese Woche",28,278,19,WHITE,true);int[] bars={36,64,44,78,57,88,68};String[] ds={"M","D","M","D","F","S","S"};for(int i=0;i<7;i++){float x=33+i*((getWidth()-66)/6f);p.setColor(i==6?GREEN:0xFF2C353D);c.drawRoundRect(x,390-bars[i],x+18,390,9,9,p);text(c,ds[i],x+3,415,11,MUTED,true);}text(c,"Tagesdurchschnitt",28,460,13,MUTED,true);text(c,String.format(Locale.US,"%,d Schritte",Math.max(steps,3200)),28,493,21,WHITE,true);}
+    void goals(Canvas c){header(c,"Ziele","SCHRITT FÜR SCHRITT");box(c,28,108,getWidth()-28,242,24,CARD);text(c,"Tagesziel",48,142,13,MUTED,true);text(c,"10.000 Schritte",48,178,25,WHITE,true);float q=Math.min(1,steps/10000f);p.setColor(0xFF2C353D);c.drawRoundRect(48,198,getWidth()-48,207,6,6,p);p.setColor(GREEN);c.drawRoundRect(48,198,48+(getWidth()-96)*q,207,6,6,p);text(c,String.format(Locale.US,"%,d / 10.000",steps),48,229,12,GREEN,true);box(c,28,264,getWidth()-28,364,24,SURFACE);text(c,"Wöchentliche Routine",48,298,15,WHITE,true);text(c,"An 5 Tagen aktiv sein",48,326,13,MUTED,false);text(c,"0 / 5 Tage",getWidth()-119,326,13,GREEN,true);text(c,"Ziele helfen dir, deine Bewegung im Blick zu behalten.",28,406,14,MUTED,false);}
+    void more(Canvas c){header(c,"Mehr","STEPFLOW EINSTELLUNGEN");setting(c,108,"Benachrichtigungen","Tracking-Status anzeigen");setting(c,188,"Schrittlänge","72 cm für Distanzschätzung");setting(c,268,"Datenschutz","Alle Daten bleiben auf diesem Gerät");setting(c,348,"Über StepFlow","Version 1.1");text(c,"Deine Schritte werden täglich um Mitternacht zurückgesetzt.",28,455,13,MUTED,false);}void setting(Canvas c,float y,String a,String b){box(c,28,y,getWidth()-28,y+66,20,CARD);text(c,a,46,y+27,15,WHITE,true);text(c,b,46,y+48,12,MUTED,false);text(c,"›",getWidth()-55,y+40,27,GREEN,false);}void notice(Canvas c,String msg){box(c,28,600,getWidth()-28,648,18,0xFF3A3021);text(c,msg,44,630,13,0xFFFFC66D,false);}
+    void bottom(Canvas c){float h=getHeight(),t=h-80,s=getWidth()/4f;p.setColor(0xFF10151A);c.drawRect(0,t,getWidth(),h,p);for(int i=0;i<4;i++){float x=s*(i+.5f);if(i==tab)box(c,x-31,t+10,x+31,t+37,14,0x2232F078);text(c,i==0?"●":i==1?"▥":i==2?"◎":"☰",x-6,t+31,18,i==tab?GREEN:MUTED,true);p.setTextSize(11);text(c,nav[i],x-half(nav[i]),t+58,11,i==tab?GREEN:MUTED,i==tab);}}
+    @Override public boolean onTouchEvent(MotionEvent e){if(e.getAction()==1&&e.getY()>getHeight()-90){tab=Math.min(3,(int)(e.getX()/(getWidth()/4f)));invalidate();}return true;}
+  }
 }
