@@ -29,3 +29,4 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
 # Debug APK artifact is uploaded after every stepflow-build push.
+# Root Android plugin repositories are configured in settings.gradle.
