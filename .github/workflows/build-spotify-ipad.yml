@@ -1,0 +1,26 @@
+name: Build Spotify iPad
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - spotify-ipad-app
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: SpotifyiPad
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build iOS Simulator App
+        run: |
+          xcodebuild \
+            -scheme SpotifyiPad \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
